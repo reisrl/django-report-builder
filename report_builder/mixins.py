@@ -1,7 +1,10 @@
+from tempfile import NamedTemporaryFile
+
 from six import BytesIO, StringIO, text_type, string_types
 
 from django.http import HttpResponse
 from django.contrib.contenttypes.models import ContentType
+
 try:
     from django.db.models.fields.related_descriptors import ManyToManyDescriptor
 except ImportError:
@@ -11,7 +14,7 @@ except ImportError:
     )
 from django.db.models import Avg, Count, Sum, Max, Min
 from openpyxl.workbook import Workbook
-from openpyxl.writer.excel import save_virtual_workbook
+
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Font
 import csv
@@ -29,7 +32,6 @@ from .utils import (
     get_model_from_path_string,
     get_custom_fields_from_model,
 )
-
 
 DisplayField = namedtuple(
     "DisplayField",
@@ -85,8 +87,15 @@ class DataExportMixin(object):
     def build_xlsx_response(self, wb, title="report"):
         """ Take a workbook and return a xlsx file response """
         title = generate_filename(title, '.xlsx')
+
         myfile = BytesIO()
-        myfile.write(save_virtual_workbook(wb))
+        with NamedTemporaryFile() as tmp:
+            tmp.close()  # with statement opened tmp, close it so wb.save can open it
+            wb.save(tmp.name)
+            with open(tmp.name, 'rb') as f:
+                f.seek(0)  # probably not needed anymore
+                myfile.write(f.read())
+
         response = HttpResponse(
             myfile.getvalue(),
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
@@ -138,7 +147,12 @@ class DataExportMixin(object):
         if not title.endswith('.xlsx'):
             title += '.xlsx'
         myfile = BytesIO()
-        myfile.write(save_virtual_workbook(wb))
+        with NamedTemporaryFile() as tmp:
+            tmp.close()  # with statement opened tmp, close it so wb.save can open it
+            wb.save(tmp.name)
+            with open(tmp.name, 'rb') as f:
+                f.seek(0)  # probably not needed anymore
+                myfile.write(f.read())
         return myfile
 
     def list_to_csv_file(self, data, title='report', header=None, widths=None):
